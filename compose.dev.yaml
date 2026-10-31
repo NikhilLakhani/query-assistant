@@ -1,0 +1,10 @@
+# Explicit opt-in loopback publication for a backend running on the host.
+# A non-internal development bridge is required for Docker host port forwarding.
+# The base topology still keeps the database on its internal-only network.
+services:
+  db:
+    ports:
+      - '127.0.0.1:5432:5432'
+    networks: [database, development]
+networks:
+  development:

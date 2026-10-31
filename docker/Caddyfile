@@ -1,0 +1,39 @@
+{
+	admin off
+	auto_https disable_redirects
+	skip_install_trust
+}
+
+https://localhost:8443 {
+	tls internal
+	@backend path /api/* /health/*
+	handle @backend {
+		reverse_proxy api:3001 {
+			# Do not delay SSE deltas or buffer an unfinished answer.
+			flush_interval -1
+			# Replace untrusted incoming forwarding data with the actual socket client.
+			header_up X-Forwarded-For {http.request.remote.host}
+		}
+	}
+	handle {
+		root * /srv
+		header {
+			-Server
+			X-Content-Type-Options nosniff
+			X-Frame-Options DENY
+			Referrer-Policy no-referrer
+			Permissions-Policy "camera=(), microphone=(), geolocation=()"
+			Content-Security-Policy "frame-ancestors 'none'"
+			Strict-Transport-Security "max-age=31536000"
+			Cache-Control no-cache
+		}
+		encode zstd gzip
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+# Container-only process health. Published traffic uses HTTPS above.
+http://:8080 {
+	respond /healthz 200
+}

@@ -1,0 +1,252 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  user
+  admin
+}
+
+enum AccountStatus {
+  active
+  suspended
+  revoked
+}
+
+enum AccessRequestStatus {
+  pending
+  approved
+  rejected
+  activated
+}
+
+enum GenerationStatus {
+  reserved
+  running
+  completed
+  cancelled
+  failed
+  interrupted
+}
+
+enum MessageRole {
+  user
+  assistant
+}
+
+enum MessageStatus {
+  completed
+  streaming
+  cancelled
+  failed
+  interrupted
+}
+
+enum AccountingStatus {
+  reported
+  estimated
+  uncertain
+}
+
+enum QuotaScope {
+  user_daily
+  global_daily
+  global_total
+}
+
+model User {
+  id           String        @id @default(uuid()) @db.Uuid
+  username     String        @unique @db.VarChar(32)
+  passwordHash String
+  role         Role          @default(user)
+  status       AccountStatus @default(active)
+  version      Int           @default(0)
+  createdAt    DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime      @updatedAt @db.Timestamptz(3)
+  quota        UserQuota?
+  sessions     Session[]
+  conversations Conversation[]
+  generations  GenerationRequest[]
+  quotaPeriods QuotaPeriod[]
+  auditActions AdminAuditEvent[] @relation("AuditActor")
+  auditTargets AdminAuditEvent[] @relation("AuditTarget")
+}
+
+model UserQuota {
+  userId            String @id @db.Uuid
+  user              User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  dailyRequests     Int
+  dailyTokens       Int
+  dailyCostNanoInr  BigInt
+}
+
+model Session {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String?  @db.Uuid
+  user          User?    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  csrfTokenHash String
+  expiresAt     DateTime @db.Timestamptz(3)
+  revokedAt     DateTime? @db.Timestamptz(3)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+
+model AccessRequest {
+  id                 String @id @default(uuid()) @db.Uuid
+  username           String @unique @db.VarChar(32)
+  status             AccessRequestStatus @default(pending)
+  activationCodeHash String? @unique
+  activationExpiresAt DateTime? @db.Timestamptz(3)
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+  @@index([status, createdAt, id])
+}
+
+model Conversation {
+  id          String @id @default(uuid()) @db.Uuid
+  userId      String @db.Uuid
+  user        User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  title       String @default("New conversation") @db.VarChar(120)
+  nextSequence Int @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  messages    Message[]
+  generations GenerationRequest[]
+  @@unique([id, userId])
+  @@index([userId, updatedAt, id])
+}
+
+model Message {
+  id             String @id @default(uuid()) @db.Uuid
+  conversationId String @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  generationId   String? @db.Uuid
+  generation     GenerationRequest? @relation(fields: [generationId, conversationId], references: [id, conversationId], onDelete: Restrict, onUpdate: NoAction)
+  sequence       Int
+  role           MessageRole
+  content        String @default("")
+  status         MessageStatus
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  @@unique([conversationId, sequence])
+  @@unique([generationId, role])
+}
+
+model PriceSnapshot {
+  id                           String @id @default(uuid()) @db.Uuid
+  version                      String @db.VarChar(100)
+  model                        String @db.VarChar(100)
+  inputNanoUsdPerMillion        BigInt
+  outputNanoUsdPerMillion       BigInt
+  inrPerUsdNano                 BigInt
+  createdAt                    DateTime @default(now()) @db.Timestamptz(3)
+  generations                  GenerationRequest[]
+  @@unique([version, model])
+}
+
+model GenerationRequest {
+  id                String @id @default(uuid()) @db.Uuid
+  userId            String @db.Uuid
+  user              User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  conversationId    String? @db.Uuid
+  conversation      Conversation? @relation(fields: [conversationId, userId], references: [id, userId], onDelete: Restrict, onUpdate: NoAction)
+  idempotencyKey    String @db.Uuid
+  payloadHash       String @db.Char(64)
+  provider          String @default("gemini") @db.VarChar(30)
+  model             String @db.VarChar(100)
+  providerRequestId String?
+  status            GenerationStatus @default(reserved)
+  priceSnapshotId   String @db.Uuid
+  priceSnapshot     PriceSnapshot @relation(fields: [priceSnapshotId], references: [id], onDelete: Restrict)
+  inputTokenBound   Int
+  outputTokenBound  Int
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  dispatchedAt      DateTime? @db.Timestamptz(3)
+  finishedAt        DateTime? @db.Timestamptz(3)
+  errorCode         String? @db.VarChar(100)
+  messages          Message[]
+  usage             UsageRecord?
+  reservation       QuotaReservation?
+  @@unique([userId, idempotencyKey])
+  @@unique([id, conversationId])
+  @@index([userId, createdAt, id])
+  @@index([status, createdAt])
+}
+
+model UsageRecord {
+  generationId             String @id @db.Uuid
+  generation               GenerationRequest @relation(fields: [generationId], references: [id], onDelete: Restrict)
+  inputTokens              Int?
+  outputTokens             Int?
+  cachedInputTokens        Int?
+  reasoningTokens          Int?
+  accountedTokens          BigInt
+  estimatedCostNanoUsd     BigInt
+  estimatedCostNanoInr     BigInt
+  providerReportedNanoUsd  BigInt?
+  accountingStatus         AccountingStatus
+  createdAt                DateTime @default(now()) @db.Timestamptz(3)
+}
+
+model QuotaPeriod {
+  id                   String @id @default(uuid()) @db.Uuid
+  scope                QuotaScope
+  ownerKey             String @db.VarChar(36)
+  userId               String? @db.Uuid
+  user                 User? @relation(fields: [userId], references: [id], onDelete: Restrict)
+  periodStart          DateTime @db.Timestamptz(3)
+  periodEnd            DateTime? @db.Timestamptz(3)
+  requestsUsed         Int @default(0)
+  requestsReserved     Int @default(0)
+  tokensUsed           BigInt @default(0)
+  tokensReserved       BigInt @default(0)
+  costUsedNanoInr      BigInt @default(0)
+  costReservedNanoInr  BigInt @default(0)
+  allocations          QuotaAllocation[]
+  @@unique([scope, ownerKey, periodStart])
+  @@index([userId, periodStart])
+}
+
+model QuotaReservation {
+  generationId String @id @db.Uuid
+  generation   GenerationRequest @relation(fields: [generationId], references: [id], onDelete: Restrict)
+  expiresAt    DateTime @db.Timestamptz(3)
+  settledAt    DateTime? @db.Timestamptz(3)
+  allocations  QuotaAllocation[]
+  @@index([settledAt, expiresAt])
+}
+
+model QuotaAllocation {
+  generationId     String @db.Uuid
+  reservation      QuotaReservation @relation(fields: [generationId], references: [generationId], onDelete: Restrict)
+  quotaPeriodId    String @db.Uuid
+  quotaPeriod      QuotaPeriod @relation(fields: [quotaPeriodId], references: [id], onDelete: Restrict)
+  requests        Int
+  tokens          BigInt
+  costNanoInr     BigInt
+  @@id([generationId, quotaPeriodId])
+}
+
+model LedgerLock {
+  id String @id @db.VarChar(30)
+}
+
+model AdminAuditEvent {
+  id           String @id @default(uuid()) @db.Uuid
+  actorId      String @db.Uuid
+  actor        User @relation("AuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+  targetUserId String? @db.Uuid
+  targetUser   User? @relation("AuditTarget", fields: [targetUserId], references: [id], onDelete: Restrict)
+  action       String @db.VarChar(100)
+  reason       String @db.VarChar(300)
+  details      Json
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  @@index([createdAt, id])
+  @@index([targetUserId, createdAt])
+}

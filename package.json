@@ -1,0 +1,56 @@
+{
+  "name": "query-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/contracts",
+    "backend",
+    "frontend"
+  ],
+  "engines": {
+    "node": "^22.16.0 || ^24.0.0",
+    "npm": ">=10"
+  },
+  "scripts": {
+    "dev": "npm run build -w @query-assistant/contracts && concurrently --kill-others --names api,web \"npm run dev -w @query-assistant/backend\" \"npm run dev -w @query-assistant/frontend\"",
+    "db:up": "docker compose -f compose.yaml -f compose.dev.yaml up -d --wait db",
+    "db:stop": "docker compose stop db",
+    "db:migrate": "npm run db:migrate -w @query-assistant/backend",
+    "admin:bootstrap": "npm run admin:bootstrap -w @query-assistant/backend --",
+    "test:integration": "npm run build -w @query-assistant/contracts && npm run db:generate -w @query-assistant/backend && node scripts/integration.mjs",
+    "build": "npm run build -w @query-assistant/contracts && npm run build -w @query-assistant/backend && npm run build -w @query-assistant/frontend",
+    "typecheck": "npm run build -w @query-assistant/contracts && npm run typecheck --workspaces",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run build -w @query-assistant/contracts && npm run test -w @query-assistant/contracts && npm run test -w @query-assistant/backend && npm run test -w @query-assistant/frontend && npm run test:setup",
+    "check": "npm run docs:check && npm run lint && npm run format:check && npm run typecheck && npm test && npm run build",
+    "setup": "node scripts/setup.mjs",
+    "docker:up": "docker compose up --build -d --wait",
+    "docker:stop": "docker compose stop",
+    "docker:migrate": "docker compose run --rm migrate",
+    "docker:admin": "docker compose run --rm --no-deps api node backend/dist/auth/provision-admin.js",
+    "db:backup": "node scripts/database-copy.mjs backup",
+    "db:restore": "node scripts/database-copy.mjs restore",
+    "test:setup": "node --test scripts/setup.test.mjs",
+    "test:docker": "node scripts/docker-smoke.mjs",
+    "docs:check": "node scripts/check-docs.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "^22.0.0",
+    "axe-core": "4.14.0",
+    "concurrently": "^9.0.0",
+    "eslint": "10.13.0",
+    "eslint-plugin-react-hooks": "^7.0.0",
+    "globals": "^16.0.0",
+    "prettier": "^3.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "~5.9.0",
+    "typescript-eslint": "^8.0.0"
+  },
+  "overrides": {
+    "minimatch": "11.0.1"
+  }
+}

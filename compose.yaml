@@ -1,0 +1,81 @@
+name: query-assistant
+services:
+  db:
+    image: postgres:17@sha256:31ba9c94a03ada9988f2bb493a22a75eef3a185884533e5cdbcd498ea835b08f
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-query_assistant}
+      POSTGRES_USER: ${POSTGRES_USER:-query_assistant}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run npm run setup and configure root .env locally}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks: [database]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: tooling
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-query_assistant}:${POSTGRES_PASSWORD:?Configure root .env}@db:5432/${POSTGRES_DB:-query_assistant}
+    networks: [database]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: 'no'
+    init: true
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: runtime
+    env_file: backend/.env
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: '3001'
+      TRUSTED_PROXY_HOST: web
+      FRONTEND_ORIGIN: https://localhost:8443
+      DATABASE_URL: postgresql://${POSTGRES_USER:-query_assistant}:${POSTGRES_PASSWORD:?Configure root .env}@db:5432/${POSTGRES_DB:-query_assistant}
+    networks: [database, app]
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    init: true
+    read_only: true
+    tmpfs: [/tmp]
+    restart: unless-stopped
+    stop_grace_period: 15s
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: https://localhost:8443
+    ports:
+      - '127.0.0.1:8443:8443'
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [app]
+    depends_on:
+      api:
+        condition: service_healthy
+    read_only: true
+    tmpfs: [/tmp]
+    restart: unless-stopped
+    stop_grace_period: 15s
+networks:
+  database:
+    internal: true
+  app:
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:

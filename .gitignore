@@ -1,0 +1,21 @@
+# Local credentials/configuration; committed examples contain placeholders only.
+.env
+.env.*
+!.env.example
+
+# Local/generated files.
+.DS_Store
+node_modules/
+dist/
+coverage/
+*.log
+backend/src/generated/
+.artifacts/
+
+# Local trust exports and sensitive database dumps.
+.local/
+backups/
+*.dump
+
+# Local credential note; never include in version control or build context.
+Gemini key.txt

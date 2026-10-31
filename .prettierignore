@@ -1,0 +1,13 @@
+node_modules
+dist
+coverage
+backend/src/generated
+.artifacts
+.vscode
+package-lock.json
+plan
+.env
+.env.*
+
+.local
+backups

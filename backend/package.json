@@ -1,0 +1,38 @@
+{
+  "name": "@query-assistant/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npm run db:generate && tsx watch --exclude \"../node_modules/**\" --exclude \"src/**/*.test.ts\" src/server.ts",
+    "start": "node dist/server.js",
+    "build": "npm run db:generate && tsc -p tsconfig.json",
+    "typecheck": "npm run db:generate && tsc -p tsconfig.check.json",
+    "test": "npm run db:generate && tsx --test src/config.test.ts src/app.test.ts src/storage/storage.unit.test.ts src/auth/auth.unit.test.ts src/chat/chat.unit.test.ts src/auth/security-regression.test.ts",
+    "db:generate": "prisma generate",
+    "db:validate": "prisma validate",
+    "db:migrate": "prisma migrate deploy",
+    "db:status": "prisma migrate status",
+    "test:integration": "tsx --test --test-concurrency=1 src/storage/storage.integration.test.ts src/auth/auth.integration.test.ts src/chat/chat.integration.test.ts src/reporting/admin.integration.test.ts",
+    "admin:bootstrap": "npm run db:generate && tsx src/auth/provision-admin.ts"
+  },
+  "dependencies": {
+    "@fastify/cookie": "11.1.5",
+    "@fastify/cors": "^11.0.0",
+    "@google/genai": "2.32.0",
+    "@js-temporal/polyfill": "0.5.1",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "@query-assistant/contracts": "0.1.0",
+    "argon2": "0.45.1",
+    "dotenv": "^17.0.0",
+    "fastify": "^5.0.0",
+    "jose": "6.2.14",
+    "pg": "8.23.1",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/pg": "8.23.1",
+    "prisma": "7.10.1"
+  }
+}

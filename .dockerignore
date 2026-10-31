@@ -1,0 +1,21 @@
+.git
+.agents
+.codex
+.aws
+**/node_modules
+**/dist
+**/coverage
+**/.env
+**/.env.*
+!**/.env.example
+**/*.log
+**/.DS_Store
+.artifacts
+backend/src/generated
+docs
+plan
+backups
+.local
+
+# Local credential note; never include in version control or build context.
+Gemini key.txt
